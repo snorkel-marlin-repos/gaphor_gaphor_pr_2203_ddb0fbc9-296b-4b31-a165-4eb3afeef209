@@ -1,0 +1,36 @@
+name: 'Install Dependencies and Test'
+description: 'Collects project metadata, installs Python and Poetry, runs pytest'
+outputs:
+  version:
+    description: 'Build version with added dev reference for non-releases'
+    value: ${{ steps.meta.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - name: Install Poetry
+      run: pipx install --pip-args=--constraint=.github/constraints.txt poetry
+      shell: bash
+    - name: Configure Poetry
+      run: poetry config virtualenvs.in-project true
+      shell: bash
+    - name: Collect Project Data
+      id: meta
+      run: .github/scripts/metadata.sh
+      shell: bash
+    - name: Install Python Dependencies
+      run: poetry install --no-interaction
+      shell: bash
+    - name: Windows specific overrides
+      if: runner.os == 'Windows'
+      run: |
+        poetry run pip install --force-reinstall (Resolve-Path C:\gtk-build\gtk\x64\release\PyGObject*.whl)
+        poetry run pip install --force-reinstall (Resolve-Path C:\gtk-build\gtk\x64\release\pycairo*.whl)
+      shell: pwsh
+    - name: Compile translations
+      run: poetry run poe gettext-mo
+      shell: bash
+    - name: Test with Pytest
+      env:
+        PYTHONWARNDEFAULTENCODING: 'true'
+      run: ${{ runner.os == 'Linux' && 'xvfb-run' || '' }} poetry run pytest --cov
+      shell: bash
